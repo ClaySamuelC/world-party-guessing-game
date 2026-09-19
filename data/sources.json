@@ -59,11 +59,11 @@
       "name": "Wikipedia",
       "url": "https://en.wikipedia.org/",
       "license": "CC BY-SA 4.0",
-      "use": "Reference link for each hand-written Historical Pin question (scripts/history-events.ts)"
+      "use": "Reference link for each hand-written Historical Pin question and landmark (scripts/history-events.ts, scripts/landmarks.ts)"
     }
   ],
   "notes": [
-    "Historical Pin questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.",
+    "Historical Pin and landmark questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.",
     "Playable set = UN member states (per CLDR territory containment) plus TW, XK, PS, VA.",
     "Where the World Bank has no land-area row, areaKm2 is computed from the Natural Earth polygon and marked areaSource=computed.",
     "Alternate and contested names come from scripts/name-overrides.ts and are best-effort, not a statement of recognition."
