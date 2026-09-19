@@ -12,12 +12,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = path.join(ROOT, 'dist')
 
 function run(cmd: string, args: string[], cwd = ROOT) {
-  const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
+  const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: false })
   if (r.status) process.exit(r.status ?? 1)
 }
 
 function capture(cmd: string, args: string[], cwd = ROOT) {
-  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', shell: process.platform === 'win32' })
+  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', shell: false })
   if (r.status) return ''
   return (r.stdout ?? '').trim()
 }
@@ -29,7 +29,7 @@ if (!remote) {
 }
 
 console.log('Building…')
-run('npm', ['run', 'build'])
+run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'])
 if (!existsSync(path.join(DIST, 'index.html'))) {
   console.error('Build did not produce dist/index.html')
   process.exit(1)
@@ -41,7 +41,7 @@ mkdirSync(work, { recursive: true })
 
 const clone = spawnSync('git', ['clone', '--depth', '1', '--branch', 'gh-pages', remote, work], {
   encoding: 'utf8',
-  shell: process.platform === 'win32',
+  shell: false,
 })
 if (clone.status) {
   run('git', ['init', '-b', 'gh-pages'], work)
