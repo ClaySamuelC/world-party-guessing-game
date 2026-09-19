@@ -1,0 +1,54 @@
+.wp-map {
+  position: absolute;
+  inset: 0;
+  background: #0b1e3a;
+  outline: none;
+}
+
+.wp-map.wp-cursor-pin,
+.wp-map.wp-cursor-pin .leaflet-interactive {
+  cursor: crosshair;
+}
+
+.wp-map.wp-cursor-country .leaflet-interactive {
+  cursor: pointer;
+}
+
+.wp-map .leaflet-interactive {
+  transition: fill 120ms ease;
+}
+
+.wp-pin {
+  position: relative;
+}
+
+.wp-pin-dot {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid #0f172a;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent);
+}
+
+.wp-pin-label {
+  position: absolute;
+  left: 10px;
+  top: -9px;
+  white-space: nowrap;
+  font: 600 12px/1.4 system-ui, sans-serif;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 0 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.leaflet-container .leaflet-control-zoom a {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}

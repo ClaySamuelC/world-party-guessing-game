@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-09-19T03:40:54.422Z",
+  "sources": [
+    {
+      "name": "Natural Earth 50m/10m Admin 0 Countries",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Country polygons, UN region/subregion, fallback multilingual names (via Wikidata, CC0)"
+    },
+    {
+      "name": "Natural Earth 10m Populated Places",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Capitals and major cities for pin questions"
+    },
+    {
+      "name": "Unicode CLDR",
+      "url": "https://cldr.unicode.org/",
+      "license": "Unicode License v3",
+      "use": "English exonyms, endonyms per official language, UN member list, ISO alpha-3 codes"
+    },
+    {
+      "name": "UN World Population Prospects",
+      "url": "https://population.un.org/wpp/",
+      "license": "CC BY 3.0 IGO",
+      "use": "Population (latest estimate year), via Our World in Data CSV mirror"
+    },
+    {
+      "name": "World Bank Open Data (AG.LND.TOTL.K2)",
+      "url": "https://data.worldbank.org/indicator/AG.LND.TOTL.K2",
+      "license": "CC BY 4.0",
+      "use": "Land area in km²"
+    },
+    {
+      "name": "flag-icons",
+      "url": "https://github.com/lipis/flag-icons",
+      "license": "MIT",
+      "use": "Flag SVGs by ISO alpha-2"
+    }
+  ],
+  "notes": [
+    "Playable set = UN member states (per CLDR territory containment) plus TW, XK, PS, VA.",
+    "Where the World Bank has no land-area row, areaKm2 is computed from the Natural Earth polygon and marked areaSource=computed.",
+    "Alternate and contested names come from scripts/name-overrides.ts and are best-effort, not a statement of recognition."
+  ]
+}
