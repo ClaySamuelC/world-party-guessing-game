@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-09-19T06:55:50.864Z",
+  "sources": [
+    {
+      "name": "Natural Earth 50m/10m Admin 0 Countries",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Country polygons, UN region/subregion, fallback multilingual names (via Wikidata, CC0)"
+    },
+    {
+      "name": "Natural Earth 10m Populated Places",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Capitals and major cities for pin questions"
+    },
+    {
+      "name": "Natural Earth 50m Lakes",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Inland water (Great Lakes, Victoria, Caspian, and other major lakes)"
+    },
+    {
+      "name": "Natural Earth 50m Admin 1 states/provinces (lines)",
+      "url": "https://www.naturalearthdata.com/",
+      "license": "Public domain",
+      "use": "Subtle internal outlines for USA, Canada, Mexico, India, and the UK"
+    },
+    {
+      "name": "Unicode CLDR",
+      "url": "https://cldr.unicode.org/",
+      "license": "Unicode License v3",
+      "use": "English exonyms, endonyms per official language, UN member list, ISO alpha-3 codes"
+    },
+    {
+      "name": "UN World Population Prospects",
+      "url": "https://population.un.org/wpp/",
+      "license": "CC BY 3.0 IGO",
+      "use": "Population (latest estimate year), via Our World in Data CSV mirror"
+    },
+    {
+      "name": "World Bank Open Data (AG.LND.TOTL.K2)",
+      "url": "https://data.worldbank.org/indicator/AG.LND.TOTL.K2",
+      "license": "CC BY 4.0",
+      "use": "Land area in km²"
+    },
+    {
+      "name": "flag-icons",
+      "url": "https://github.com/lipis/flag-icons",
+      "license": "MIT",
+      "use": "Flag SVGs by ISO alpha-2"
+    },
+    {
+      "name": "UDHR in XML (Universal Declaration of Human Rights translations)",
+      "url": "https://efele.net/udhr/",
+      "license": "Public domain (UN text)",
+      "use": "Article 1 in each official language for the Language Sample game; language ↔ country via CLDR official-language data"
+    },
+    {
+      "name": "Wikipedia",
+      "url": "https://en.wikipedia.org/",
+      "license": "CC BY-SA 4.0",
+      "use": "Reference link for each hand-written Historical Pin question (scripts/history-events.ts)"
+    }
+  ],
+  "notes": [
+    "Historical Pin questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.",
+    "Playable set = UN member states (per CLDR territory containment) plus TW, XK, PS, VA.",
+    "Where the World Bank has no land-area row, areaKm2 is computed from the Natural Earth polygon and marked areaSource=computed.",
+    "Alternate and contested names come from scripts/name-overrides.ts and are best-effort, not a statement of recognition."
+  ]
+}
