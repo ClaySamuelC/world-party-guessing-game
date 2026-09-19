@@ -11,8 +11,11 @@ npm run dev        # http://localhost:5173
 
 ```sh
 npm run build      # static site in dist/ (relative paths, works on GitHub Pages)
+npm run deploy     # build and publish dist/ to the gh-pages branch (updates the live site)
 npm run data       # rebuild public/data from upstream sources (add --fresh to re-download)
 ```
+
+Live site (GitHub Pages): https://claysamuelc.github.io/world-party-guessing-game/
 
 ## How it plays
 

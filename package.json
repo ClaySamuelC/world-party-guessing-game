@@ -8,7 +8,8 @@
     "data": "tsx scripts/build-data.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "tsx scripts/deploy.ts"
   },
   "dependencies": {
     "flag-icons": "^7.5.0",

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { Dataset } from '../data/load'
 import { joinPeerRoom, selfId, type PeerRoom } from '../net/room'
-import { initialRoomState, roomReducer } from './client'
+import { canAnswer, initialRoomState, roomReducer } from './client'
 import { MatchHost, type HostTransport } from './host'
 import { HOST_MESSAGE_TYPES, type GuestMessage, type HostMessage } from './protocol'
 import type { Answer, MatchSettings } from './questions'
@@ -19,6 +19,10 @@ export interface HostActions {
   start(): void
   updateSettings(patch: Partial<MatchSettings>): void
   backToLobby(): void
+  /** After a solo reveal, go to the next question without waiting. */
+  advance(): void
+  /** Stop an endless (or any) match and show scores. */
+  endMatch(): void
 }
 
 const flagLoaders = import.meta.glob('/node_modules/flag-icons/flags/4x3/*.svg', { query: '?raw', import: 'default' }) as Record<
@@ -63,7 +67,7 @@ export function useSession(config: SessionConfig, dataset: Dataset) {
         selfId,
         selfName: config.name,
         transport,
-        packInputs: { countries: dataset.countryList, places: dataset.places, loadFlagSvg },
+        packInputs: { countries: dataset.countryList, places: dataset.places, languages: dataset.languages, history: dataset.history, loadFlagSvg },
         onLocal: (msg, from) => dispatch({ kind: 'host', msg, from }),
       })
       hostRef.current = host
@@ -95,16 +99,18 @@ export function useSession(config: SessionConfig, dataset: Dataset) {
     }
   }, [config.role, config.code, config.name, dataset])
 
-  const submitAnswer = useCallback(
-    (answer: Answer) => {
-      const q = state.question
-      if (!q || state.phase !== 'question' || state.myAnswer) return
-      dispatch({ kind: 'local-answer', answer })
-      if (hostRef.current) hostRef.current.submitLocalAnswer(answer)
-      else if (roomRef.current && state.hostId) roomRef.current.send({ t: 'answer', questionId: q.q.id, answer }, state.hostId)
-    },
-    [state.question, state.phase, state.myAnswer, state.hostId],
-  )
+  const stateRef = useRef(state)
+  useLayoutEffect(() => {
+    stateRef.current = state
+  })
+  const submitAnswer = useCallback((answer: Answer) => {
+    const s = stateRef.current
+    const q = s.question
+    if (!q || !canAnswer(s, selfId, answer)) return
+    dispatch({ kind: 'local-answer', answer })
+    if (hostRef.current) hostRef.current.submitLocalAnswer(answer)
+    else if (roomRef.current && s.hostId) roomRef.current.send({ t: 'answer', questionId: q.q.id, answer }, s.hostId)
+  }, [])
 
   const hostActions = useMemo<HostActions | null>(
     () =>
@@ -114,6 +120,8 @@ export function useSession(config: SessionConfig, dataset: Dataset) {
             start: () => void hostRef.current?.start(),
             updateSettings: (patch) => hostRef.current?.updateSettings(patch),
             backToLobby: () => hostRef.current?.backToLobby(),
+            advance: () => hostRef.current?.advance(),
+            endMatch: () => hostRef.current?.endMatch(),
           },
     [config.role],
   )

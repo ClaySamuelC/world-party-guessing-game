@@ -27,6 +27,30 @@ export function scorePin(distanceKm: number): number {
   return Math.round(MAX_SCORE * Math.exp(-d / PIN_DECAY_KM))
 }
 
+/** Points per country delivered in Bid and Guess. */
+export const BID_POINTS_PER_COUNTRY = 150
+/** Extra for the highest bid that was actually fulfilled (multiplayer only). */
+export const BID_TOP_BONUS = 200
+/** Penalty for bidding more countries than exist in the category. */
+export const OVERBID_PENALTY = -300
+
+/**
+ * Bid and Guess. Fulfil your bid: bid × 150 (+50 × bid over 3 as a risk bonus). Fall short:
+ * lose 100 per missing country, down to −300. Overbid the whole category: flat −300.
+ */
+export function scoreBid(bid: number, hits: number, overbid: boolean): number {
+  if (overbid) return OVERBID_PENALTY
+  if (bid <= 0) return 0
+  if (hits >= bid) return bid * BID_POINTS_PER_COUNTRY + Math.max(0, bid - 3) * 50
+  return Math.max(OVERBID_PENALTY, -(bid - hits) * 100)
+}
+
+/** Guessing Streak: each rank claimed is worth an equal slice of 1000, plus 200 for closing the list. */
+export function scoreStreakPick(listLength: number): number {
+  return Math.round(MAX_SCORE / listLength)
+}
+export const STREAK_FINISH_BONUS = 200
+
 export function formatKm(km: number): string {
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km).toLocaleString('en-US')} km`
 }

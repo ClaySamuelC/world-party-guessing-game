@@ -1,3 +1,4 @@
+import { endonymTexts } from './names'
 import type { Country } from './types'
 
 /** Lower-case, strip diacritics and punctuation so "Cote d'Ivoire" matches "Côte d’Ivoire". */
@@ -13,7 +14,7 @@ export function normalize(s: string): string {
 
 /** Every string that counts as this country's name, for search and answer matching. */
 export function allNames(c: Country): string[] {
-  return [c.exonymEn, ...c.endonyms, ...c.alsoKnownAs]
+  return [c.exonymEn, ...endonymTexts(c.endonyms), ...c.alsoKnownAs]
 }
 
 export interface SearchHit {

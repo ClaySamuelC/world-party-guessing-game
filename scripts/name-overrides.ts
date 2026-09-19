@@ -12,7 +12,7 @@ export interface NameOverride {
   /** Extra English or romanised names (alternate, former, formal). */
   alsoKnownAs?: string[]
   /** Extra endonyms not derivable from CLDR territory names. */
-  endonyms?: string[]
+  endonyms?: { text: string; language?: string }[]
   /** Short note when the name is contested or recently changed. */
   nameNote?: string
 }
@@ -20,25 +20,34 @@ export interface NameOverride {
 export const NAME_OVERRIDES: Record<string, NameOverride> = {
   TW: {
     alsoKnownAs: ['Republic of China', 'Chinese Taipei', 'Taiwan, Province of China', 'Formosa'],
-    endonyms: ['中華民國', '臺灣'],
+    endonyms: [
+      { text: '中華民國', language: 'Chinese (Traditional)' },
+      { text: '臺灣', language: 'Chinese (Traditional)' },
+    ],
     nameNote:
       'Self-governed as the Republic of China. Recognised under different names depending on the recognising state or organisation (Taiwan, Republic of China, Chinese Taipei, Taiwan Province of China).',
   },
   XK: {
     alsoKnownAs: ['Republic of Kosovo', 'Kosovo and Metohija'],
-    endonyms: ['Kosova', 'Косово'],
+    endonyms: [
+      { text: 'Kosova', language: 'Albanian' },
+      { text: 'Косово', language: 'Serbian' },
+    ],
     nameNote:
       'Declared independence in 2008. Recognised by a majority but not all UN member states; some states refer to it as the Autonomous Province of Kosovo and Metohija.',
   },
   PS: {
     alsoKnownAs: ['State of Palestine', 'Palestinian Territories', 'West Bank and Gaza'],
-    endonyms: ['فلسطين'],
+    endonyms: [{ text: 'فلسطين', language: 'Arabic' }],
     nameNote:
       'UN observer state. Referred to as the State of Palestine, the Palestinian Territories, or West Bank and Gaza depending on the source.',
   },
   VA: {
     alsoKnownAs: ['Holy See', 'Vatican', 'Vatican City State'],
-    endonyms: ['Città del Vaticano', 'Status Civitatis Vaticanae'],
+    endonyms: [
+      { text: 'Città del Vaticano', language: 'Italian' },
+      { text: 'Status Civitatis Vaticanae', language: 'Latin' },
+    ],
     nameNote: 'The Holy See is the UN observer entity; Vatican City is the territory it governs.',
   },
   CZ: { alsoKnownAs: ['Czech Republic'], nameNote: 'Czechia is the short name adopted in 2016; Czech Republic remains the formal name.' },

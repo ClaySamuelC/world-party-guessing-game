@@ -24,7 +24,7 @@ export function Home({ initialName, initialCode, sources, onHost, onJoin, onSolo
     <div className="home">
       <div className="home-card">
         <h1>World Party Guessing Game</h1>
-        <p className="tagline">Click countries and pin cities on a shared world map. Up to {MAX_PLAYERS} friends, peer-to-peer, no server.</p>
+        <p className="tagline">Six mini-games on a shared world map: click countries, pin cities and history, read a language, bid on categories, and run a streak. Up to {MAX_PLAYERS} friends, peer-to-peer, no server.</p>
 
         <label className="field">
           <span>Your name</span>

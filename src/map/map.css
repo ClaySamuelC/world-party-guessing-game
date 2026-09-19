@@ -5,17 +5,36 @@
   outline: none;
 }
 
+.wp-map .leaflet-container {
+  background: #0b1e3a;
+}
+
+.wp-map .leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+}
+
 .wp-map.wp-cursor-pin,
+.wp-map.wp-cursor-pin .leaflet-container,
+.wp-map.wp-cursor-pin .leaflet-container.leaflet-grab,
 .wp-map.wp-cursor-pin .leaflet-interactive {
   cursor: crosshair;
 }
 
+.wp-map.wp-cursor-country,
+.wp-map.wp-cursor-country .leaflet-container,
+.wp-map.wp-cursor-country .leaflet-container.leaflet-grab,
 .wp-map.wp-cursor-country .leaflet-interactive {
   cursor: pointer;
 }
 
 .wp-map .leaflet-interactive {
-  transition: fill 120ms ease;
+  transition: none;
+}
+
+/* Lakes and state lines sit above the country canvas; they must not swallow hover/click. */
+.wp-map .leaflet-lakes-pane,
+.wp-map .leaflet-states-pane {
+  pointer-events: none;
 }
 
 .wp-pin {
@@ -51,4 +70,25 @@
   background: #1e293b;
   color: #e2e8f0;
   border-color: #334155;
+}
+
+.wp-bubble-wrap {
+  background: none !important;
+  border: none !important;
+}
+
+.wp-bubble {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(248, 250, 252, 0.92);
+  background: rgba(248, 250, 252, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+
+.wp-bubble:hover {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: #fbbf24;
 }

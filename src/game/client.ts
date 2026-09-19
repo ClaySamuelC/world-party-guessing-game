@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, type Answer, type MatchSettings, type PublicQuestion } from './questions'
-import type { HostMessage, Player } from './protocol'
+import type { BidProgress, HostMessage, Player, StreakState } from './protocol'
 
 export type Phase = 'connecting' | 'lobby' | 'question' | 'reveal' | 'finished' | 'rejected' | 'host-left'
 
@@ -9,11 +9,27 @@ export interface RoomState {
   hostId: string | null
   players: Player[]
   settings: MatchSettings
-  question: { index: number; total: number; q: PublicQuestion; receivedAt: number; timeLimitMs: number } | null
+  question: {
+    index: number
+    total: number
+    q: PublicQuestion
+    /** When the current timer started (question start, collect phase start, or streak turn start). */
+    receivedAt: number
+    timeLimitMs: number
+  } | null
   answeredIds: string[]
+  /** Locked single answer (click/pin/language/history) or the bid (bid phase). */
   myAnswer: Answer | null
+  /** Bid and Guess: 'bid' until the host opens the collect phase. */
+  bidPhase: 'bid' | 'collect' | null
+  bidProgress: Record<string, BidProgress>
+  /** Bid and Guess collect phase: my clicks as confirmed by the host. */
+  myPicks: { iso2: string; ok: boolean }[]
+  /** Guessing Streak turn state. */
+  streak: StreakState | null
   reveal: Extract<HostMessage, { t: 'reveal' }> | null
   totals: Record<string, number>
+  roundsPlayed: number
   rejectedReason: string | null
 }
 
@@ -25,8 +41,13 @@ export const initialRoomState: RoomState = {
   question: null,
   answeredIds: [],
   myAnswer: null,
+  bidPhase: null,
+  bidProgress: {},
+  myPicks: [],
+  streak: null,
   reveal: null,
   totals: {},
+  roundsPlayed: 0,
   rejectedReason: null,
 }
 
@@ -36,14 +57,37 @@ export type ClientEvent =
   | { kind: 'host-left' }
   | { kind: 'reset' }
 
+/** Can this player send `answer` right now? Mirrors the host's acceptance rules. */
+export function canAnswer(state: RoomState, selfId: string, answer: Answer): boolean {
+  const q = state.question
+  if (!q || state.phase !== 'question') return false
+  switch (q.q.type) {
+    case 'bid':
+      if (state.bidPhase === 'collect') {
+        const p = state.bidProgress[selfId]
+        return 'iso2' in answer && !!p && !p.done && !state.myPicks.some((x) => x.iso2 === answer.iso2)
+      }
+      return 'bid' in answer && !state.myAnswer
+    case 'streak':
+      return 'iso2' in answer && state.streak?.activeId === selfId && !state.streak.claimed.some((c) => c.iso2 === answer.iso2) && !state.streak.missed.includes(answer.iso2)
+    default:
+      return !state.myAnswer
+  }
+}
+
 export function roomReducer(state: RoomState, ev: ClientEvent): RoomState {
   switch (ev.kind) {
     case 'reset':
       return initialRoomState
     case 'host-left':
       return state.phase === 'rejected' ? state : { ...state, phase: 'host-left' }
-    case 'local-answer':
-      return state.phase === 'question' && !state.myAnswer ? { ...state, myAnswer: ev.answer } : state
+    case 'local-answer': {
+      if (state.phase !== 'question' || !state.question) return state
+      const type = state.question.q.type
+      // Multi-pick games are confirmed by the host; only single answers and bids lock locally.
+      if (type === 'streak' || (type === 'bid' && state.bidPhase === 'collect')) return state
+      return state.myAnswer ? state : { ...state, myAnswer: ev.answer }
+    }
     case 'host': {
       const { msg, from } = ev
       // Once we know the host, ignore anything claiming to be host traffic from someone else.
@@ -61,8 +105,13 @@ export function roomReducer(state: RoomState, ev: ClientEvent): RoomState {
             question: null,
             answeredIds: [],
             myAnswer: null,
+            bidPhase: null,
+            bidProgress: {},
+            myPicks: [],
+            streak: null,
             reveal: null,
             totals: state.phase === 'finished' ? {} : state.totals,
+            roundsPlayed: state.phase === 'finished' ? 0 : state.roundsPlayed,
           }
         case 'question':
           return {
@@ -71,16 +120,43 @@ export function roomReducer(state: RoomState, ev: ClientEvent): RoomState {
             question: { index: msg.index, total: msg.total, q: msg.q, receivedAt: Date.now(), timeLimitMs: msg.timeLimitMs },
             answeredIds: [],
             myAnswer: null,
+            bidPhase: msg.q.type === 'bid' ? 'bid' : null,
+            bidProgress: {},
+            myPicks: [],
+            streak: null,
             reveal: null,
           }
         case 'answered':
           return state.question?.q.id === msg.questionId ? { ...state, answeredIds: msg.playerIds } : state
+        case 'phase':
+          if (state.question?.q.id !== msg.questionId) return state
+          return {
+            ...state,
+            bidPhase: msg.phase,
+            bidProgress: msg.progress,
+            answeredIds: [],
+            question: { ...state.question, receivedAt: Date.now(), timeLimitMs: msg.timeLimitMs },
+          }
+        case 'pick':
+          if (state.question?.q.id !== msg.questionId || state.myPicks.some((p) => p.iso2 === msg.iso2)) return state
+          return { ...state, myPicks: [...state.myPicks, { iso2: msg.iso2, ok: msg.ok }] }
+        case 'progress':
+          return state.question?.q.id === msg.questionId ? { ...state, bidProgress: msg.progress } : state
+        case 'streak': {
+          if (state.question?.q.id !== msg.questionId) return state
+          const turnChanged = !state.streak || state.streak.turn !== msg.state.turn
+          return {
+            ...state,
+            streak: msg.state,
+            question: turnChanged ? { ...state.question, receivedAt: Date.now(), timeLimitMs: state.settings.timeLimit * 1000 } : state.question,
+          }
+        }
         case 'reveal':
           return state.question?.q.id === msg.questionId
             ? { ...state, phase: 'reveal', reveal: msg, totals: msg.totals }
             : state
         case 'finished':
-          return { ...state, phase: 'finished', totals: msg.totals }
+          return { ...state, phase: 'finished', totals: msg.totals, roundsPlayed: msg.rounds }
       }
     }
   }

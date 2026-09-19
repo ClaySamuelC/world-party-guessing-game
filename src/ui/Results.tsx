@@ -18,7 +18,9 @@ export function Results({ state, selfId, hostActions, onLeave }: Props) {
         <h1>Final scores</h1>
         {winner && (
           <p className="tagline">
-            {winner.id === selfId ? 'You win!' : `${winner.name} wins!`} {state.totals[winner.id] ?? 0} points.
+            {state.settings.endless
+              ? `${state.roundsPlayed} question${state.roundsPlayed === 1 ? '' : 's'} · ${state.totals[selfId] ?? 0} points`
+              : `${winner.id === selfId ? 'You win!' : `${winner.name} wins!`} ${state.totals[winner.id] ?? 0} points.`}
           </p>
         )}
         <div className="panel">

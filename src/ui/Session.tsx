@@ -33,7 +33,16 @@ export function Session({ config, dataset, onLeave }: { config: SessionConfig; d
       return <Lobby state={state} code={config.code} selfId={selfId} hostActions={hostActions} onLeave={onLeave} />
     case 'question':
     case 'reveal':
-      return <Play dataset={dataset} state={state} selfId={selfId} submitAnswer={submitAnswer} onLeave={onLeave} />
+      return (
+        <Play
+          dataset={dataset}
+          state={state}
+          selfId={selfId}
+          submitAnswer={submitAnswer}
+          hostActions={hostActions}
+          onLeave={onLeave}
+        />
+      )
     case 'finished':
       return <Results state={state} selfId={selfId} hostActions={hostActions} onLeave={onLeave} />
     case 'rejected':

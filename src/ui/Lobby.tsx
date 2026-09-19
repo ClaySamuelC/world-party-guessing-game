@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { RoomState } from '../game/client'
 import type { HostActions } from '../game/useSession'
-import { MAX_PLAYERS, type GameMode } from '../game/questions'
+import { MAX_PLAYERS, MINI_GAMES, type MiniGameId } from '../game/questions'
+import { getFrameAnswers, setFrameAnswers } from './prefs'
 
 interface Props {
   state: RoomState
@@ -13,9 +14,16 @@ interface Props {
 
 export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
   const [copied, setCopied] = useState(false)
+  const [autoFrame, setAutoFrame] = useState(getFrameAnswers)
   const isHost = !!hostActions
   const link = code ? `${location.origin}${location.pathname}?room=${code}` : null
   const s = state.settings
+
+  const toggleType = (id: MiniGameId, on: boolean) => {
+    const types = on ? [...s.types, id] : s.types.filter((t) => t !== id)
+    if (!types.length) return
+    hostActions?.updateSettings({ types })
+  }
 
   const copy = async () => {
     if (!link) return
@@ -64,19 +72,38 @@ export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
         </ul>
         {code && state.players.length < 2 && <p className="muted">Share the code or link. Friends appear here as they connect.</p>}
 
+        <h3>Mini-games</h3>
+        <p className="muted">Questions rotate through the checked games. Leave them all on for the full party pack.</p>
+        <ul className="game-picks">
+          {MINI_GAMES.map((g) => {
+            const on = s.types.includes(g.id)
+            return (
+              <li key={g.id} className={on ? 'on' : ''}>
+                <label className="check">
+                  <input type="checkbox" disabled={!isHost || (on && s.types.length === 1)} checked={on} onChange={(e) => toggleType(g.id, e.target.checked)} />
+                  <span>
+                    <strong>{g.name}</strong>
+                    <small>{g.blurb}</small>
+                  </span>
+                </label>
+              </li>
+            )
+          })}
+        </ul>
+
         <h3>Settings</h3>
         <div className="settings">
           <label>
-            <span>Questions</span>
-            <select disabled={!isHost} value={s.mode} onChange={(e) => hostActions?.updateSettings({ mode: e.target.value as GameMode })}>
-              <option value="both">Country click + pin the location</option>
-              <option value="click">Country click only</option>
-              <option value="pin">Pin the location only</option>
-            </select>
-          </label>
-          <label>
             <span>Rounds</span>
-            <select disabled={!isHost} value={s.rounds} onChange={(e) => hostActions?.updateSettings({ rounds: Number(e.target.value) })}>
+            <select
+              disabled={!isHost}
+              value={s.endless ? 'endless' : String(s.rounds)}
+              onChange={(e) => {
+                if (e.target.value === 'endless') hostActions?.updateSettings({ endless: true })
+                else hostActions?.updateSettings({ endless: false, rounds: Number(e.target.value) })
+              }}
+            >
+              <option value="endless">Endless</option>
               {[5, 10, 15, 20, 30].map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -84,6 +111,7 @@ export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
               ))}
             </select>
           </label>
+          {s.endless && <p className="muted">Questions keep coming until you end the match.</p>}
           <label>
             <span>Seconds per question</span>
             <select disabled={!isHost} value={s.timeLimit} onChange={(e) => hostActions?.updateSettings({ timeLimit: Number(e.target.value) })}>
@@ -94,6 +122,21 @@ export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
               ))}
             </select>
           </label>
+          {(s.types.includes('bid') || s.types.includes('streak')) && (
+            <p className="muted">Bid and guess adds 2 s of collecting time per country bid. Guessing streak: any order, three strikes then the next player picks up (or the question ends in solo).</p>
+          )}
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={autoFrame}
+              onChange={(e) => {
+                setAutoFrame(e.target.checked)
+                setFrameAnswers(e.target.checked)
+              }}
+            />
+            <span>Zoom the map to my guess and the answer after each question</span>
+          </label>
+          <p className="muted">Only on your screen. Turn this off if you want to keep the camera where you left it.</p>
         </div>
 
         {isHost ? (

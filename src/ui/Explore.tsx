@@ -20,6 +20,8 @@ export function Explore({ dataset, onBack }: { dataset: Dataset; onBack: () => v
     <div className="screen">
       <WorldMap
         geojson={dataset.geojson}
+        lakes={dataset.lakes}
+        states={dataset.states}
         interaction="country"
         roles={selected ? { [selected.iso2]: 'selected' } : undefined}
         flyTo={flyTo}
