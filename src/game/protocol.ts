@@ -18,8 +18,14 @@ export interface PlayerResult {
   hits?: string[]
   misses?: string[]
   overbid?: boolean
+  /** Solo rush: scored as hits minus misses, no numeric bid. */
+  rush?: boolean
   /** Guessing streak: how many ranks this player claimed. */
   streak?: number
+  /** Pin-circle: the submitted radius. */
+  radiusKm?: number
+  /** Draw the country: 0…1 silhouette overlap. */
+  overlap?: number
 }
 
 /** Bid and Guess: what everyone can see about each player's progress during the collect phase. */
@@ -29,6 +35,18 @@ export interface BidProgress {
   misses: number
   overbid: boolean
   done: boolean
+  /** Solo rush: no numeric bid; click until time runs out or the set is complete. */
+  rush?: boolean
+}
+
+/** Bid and Guess multiplayer: open rising auction until nobody outbids. */
+export interface AuctionState {
+  highBid: number
+  highBidderId: string | null
+  /** Players who folded this auction. */
+  passed: string[]
+  /** Last accepted raise from each player who has bid. */
+  bids: Record<string, number>
 }
 
 /** Guessing Streak: shared turn state. */
@@ -48,7 +66,7 @@ export interface StreakState {
   /** Claimed countries, with who claimed them (any order). */
   claimed: { iso2: string; playerId: string }[]
   /** Latest wrong click, with rank context for the UI. */
-  lastMiss: { playerId: string; iso2: string; name: string; rank: number; value: string; metric: string; total: number } | null
+  lastMiss: { playerId: string; iso2: string; name: string; rank: number; value: string; metric: string; total: number; outside?: boolean } | null
   /** Wrong iso2s already counted as a strike this turn (re-clicks do not cost another). */
   missed: string[]
   /** Players who already had their turn this question. */
@@ -61,13 +79,15 @@ export type HostMessage =
   | { t: 'rejected'; reason: string }
   | { t: 'question'; index: number; total: number; q: PublicQuestion; timeLimitMs: number }
   | { t: 'answered'; questionId: string; playerIds: string[] }
+  /** Bid and Guess auction tick (raise, pass, or timer reset). */
+  | { t: 'auction'; questionId: string; state: AuctionState; timeLimitMs: number }
   /** Bid and Guess moves from bidding to collecting; the timer restarts with a fresh limit. */
   | { t: 'phase'; questionId: string; phase: 'collect'; timeLimitMs: number; progress: Record<string, BidProgress> }
   /** Result of one of *your* clicks in the collect phase (sent only to that player). */
   | { t: 'pick'; questionId: string; iso2: string; ok: boolean }
   | { t: 'progress'; questionId: string; progress: Record<string, BidProgress> }
   | { t: 'streak'; questionId: string; state: StreakState }
-  | { t: 'reveal'; questionId: string; key: AnswerKey; results: Record<string, PlayerResult>; totals: Record<string, number> }
+  | { t: 'reveal'; questionId: string; key: AnswerKey; results: Record<string, PlayerResult>; totals: Record<string, number>; eliminated?: string[] }
   | { t: 'finished'; totals: Record<string, number>; rounds: number }
 
 /** Guest -> host. */
@@ -75,4 +95,4 @@ export type GuestMessage = { t: 'hello'; name: string } | { t: 'answer'; questio
 
 export type Message = HostMessage | GuestMessage
 
-export const HOST_MESSAGE_TYPES = new Set<Message['t']>(['roster', 'rejected', 'question', 'answered', 'phase', 'pick', 'progress', 'streak', 'reveal', 'finished'])
+export const HOST_MESSAGE_TYPES = new Set<Message['t']>(['roster', 'rejected', 'question', 'answered', 'auction', 'phase', 'pick', 'progress', 'streak', 'reveal', 'finished'])

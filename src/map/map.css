@@ -31,6 +31,11 @@
   transition: none;
 }
 
+/* Old raster held over a settle so the live canvas can paint underneath unseen. */
+.wp-map .wp-canvas-ghost {
+  pointer-events: none !important;
+}
+
 /* Lakes and state lines sit above the country canvas; they must not swallow hover/click. */
 .wp-map .leaflet-lakes-pane,
 .wp-map .leaflet-states-pane {

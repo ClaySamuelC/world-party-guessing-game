@@ -275,6 +275,37 @@ select:focus {
   align-items: flex-start;
   gap: 0.55rem;
 }
+.mode-picks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.mode-pick {
+  font: inherit;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0d1526;
+  color: var(--text);
+  padding: 0.7rem 0.8rem;
+  display: grid;
+  gap: 0.2rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.mode-pick:hover:not(:disabled) {
+  background: #132036;
+}
+.mode-pick.on {
+  opacity: 1;
+  border-color: var(--accent);
+  background: #1a2438;
+}
+.mode-pick small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
 .game-picks {
   list-style: none;
   margin: 0;
@@ -321,6 +352,169 @@ select:focus {
   position: relative;
   height: 100%;
   overflow: hidden;
+}
+.screen.map-off .wp-map {
+  visibility: hidden;
+  pointer-events: none;
+}
+.blank-stage {
+  position: absolute;
+  inset: 0;
+  background: #071225;
+  display: grid;
+  place-items: center;
+  padding: 7.5rem 1.5rem 2rem;
+}
+.screen.draw-mode {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  grid-template-rows: 1fr;
+}
+.screen.draw-mode .wp-map {
+  display: none;
+}
+.screen.draw-mode .blank-stage {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+}
+.screen.draw-mode .overlay.top-left {
+  position: relative;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  padding: 12px;
+  overflow: auto;
+  z-index: 2;
+}
+.screen.draw-mode .overlay.top-right {
+  z-index: 3;
+}
+.screen.draw-mode .prompt {
+  text-align: left;
+  max-height: none;
+}
+.country-silhouette {
+  width: min(72vw, 520px);
+  height: min(58vh, 420px);
+  overflow: visible;
+}
+.country-silhouette .outline-guess {
+  fill: #94a3b8;
+  fill-rule: evenodd;
+  stroke: #e2e8f0;
+  stroke-width: 1.25px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.country-silhouette .outline-official {
+  fill: rgba(74, 222, 128, 0.35);
+  fill-rule: evenodd;
+  stroke: #4ade80;
+  stroke-width: 1.25px;
+  vector-effect: non-scaling-stroke;
+}
+.draw-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.draw-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  display: block;
+}
+.draw-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 0.3rem;
+  z-index: 2;
+}
+.draw-zoom .btn {
+  min-width: 2.4rem;
+  padding: 0.4rem 0.55rem;
+}
+.draw-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.draw-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.draw-reveal-score {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+}
+.draw-phase-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.draw-phase-label.ready {
+  color: var(--muted);
+}
+.draw-phase-label.missed {
+  color: #fb7185;
+}
+.draw-phase-label.extra {
+  color: #fb923c;
+}
+.draw-phase-label.match {
+  color: var(--good);
+}
+.draw-tally {
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+.draw-tally.good {
+  color: var(--good);
+}
+.draw-tally.bad {
+  color: var(--bad);
+}
+.draw-tally.missed {
+  color: #fb7185;
+}
+.draw-tally.extra {
+  color: #fb923c;
+}
+.draw-tally-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.name-guess {
+  position: relative;
+}
+.name-suggestions {
+  max-height: 220px;
 }
 .overlay {
   position: absolute;
@@ -575,11 +769,25 @@ select:focus {
   max-width: 34rem;
   unicode-bidi: plaintext;
 }
+.auction-panel {
+  margin-top: 0.4rem;
+}
+.bid-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
 .bid-form {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+.bid-actions .bid-form {
+  margin-top: 0;
 }
 .bid-input {
   width: 6rem;
@@ -611,6 +819,10 @@ select:focus {
 }
 .chip.bad {
   color: var(--bad);
+}
+.chip.lead {
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 .streak-list {
   list-style: none;
@@ -797,6 +1009,18 @@ select:focus {
 }
 
 @media (max-width: 720px) {
+  .screen.draw-mode {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .screen.draw-mode .overlay.top-left {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .screen.draw-mode .blank-stage {
+    grid-column: 1;
+    grid-row: 2;
+  }
   .overlay.top-right {
     width: 170px;
   }

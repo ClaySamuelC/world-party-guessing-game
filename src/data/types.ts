@@ -60,7 +60,7 @@ export interface CountryFeatureProps {
   tiny: boolean
   /** Spread-out island group: water between islands should still hit this country. */
   archipelago: boolean
-  /** Land polygon vs. the invisible convex hull used for archipelago hit-testing. */
+  /** Land polygon vs. the faint convex hull used for archipelago hit-testing and grouping. */
   kind: 'land' | 'hull'
   labelLat: number
   labelLng: number
@@ -89,6 +89,21 @@ export interface HistoryEvent {
   lng: number
   /** ISO2 of the country the place is in today, when applicable. */
   iso2: string | null
+  sourceUrl: string
+  sourceLabel: string
+}
+
+/** A famous place (wonder, landmark, or point of interest) for Pin the location. */
+export type Landmark = HistoryEvent
+
+/** Top-3 merchandise exporters for the Export Guess mini-game. */
+export interface ExportCommodity {
+  id: string
+  /** Short name used in the prompt: "Click one of the top 3 exporters of coffee". */
+  name: string
+  /** Rank 1–3, ISO 3166-1 alpha-2. */
+  iso2s: [string, string, string]
+  year: number
   sourceUrl: string
   sourceLabel: string
 }

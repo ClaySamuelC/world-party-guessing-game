@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { RoomState } from '../game/client'
 import type { HostActions } from '../game/useSession'
-import { MAX_PLAYERS, MINI_GAMES, type MiniGameId } from '../game/questions'
+import { ELIMINATE_SCOPES, MAX_PLAYERS, PARTY_GAMES, type MatchMode, type MiniGameId } from '../game/questions'
 import { getFrameAnswers, setFrameAnswers } from './prefs'
 
 interface Props {
@@ -72,24 +72,53 @@ export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
         </ul>
         {code && state.players.length < 2 && <p className="muted">Share the code or link. Friends appear here as they connect.</p>}
 
-        <h3>Mini-games</h3>
-        <p className="muted">Questions rotate through the checked games. Leave them all on for the full party pack.</p>
-        <ul className="game-picks">
-          {MINI_GAMES.map((g) => {
-            const on = s.types.includes(g.id)
-            return (
-              <li key={g.id} className={on ? 'on' : ''}>
-                <label className="check">
-                  <input type="checkbox" disabled={!isHost || (on && s.types.length === 1)} checked={on} onChange={(e) => toggleType(g.id, e.target.checked)} />
-                  <span>
-                    <strong>{g.name}</strong>
-                    <small>{g.blurb}</small>
-                  </span>
-                </label>
-              </li>
-            )
-          })}
-        </ul>
+        <h3>Game mode</h3>
+        <div className="mode-picks">
+          {(
+            [
+              { id: 'party' as MatchMode, name: 'Party pack', blurb: 'The main mix: click, pin, language, exports, history, bid, streak, name, and draw.' },
+              { id: 'eliminate' as MatchMode, name: 'Elimination', blurb: 'Only this: click the named country to knock it out. Misses stay in the pool.' },
+            ] as const
+          ).map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              className={`mode-pick ${s.matchMode === mode.id ? 'on' : ''}`}
+              disabled={!isHost}
+              onClick={() => hostActions?.updateSettings({ matchMode: mode.id })}
+            >
+              <strong>{mode.name}</strong>
+              <small>{mode.blurb}</small>
+            </button>
+          ))}
+        </div>
+
+        {s.matchMode === 'party' && (
+          <>
+            <h3>Mini-games</h3>
+            <p className="muted">Questions rotate through the checked games. Leave them all on for the full party pack.</p>
+            <ul className="game-picks">
+              {PARTY_GAMES.map((g) => {
+                const on = s.types.includes(g.id)
+                return (
+                  <li key={g.id} className={on ? 'on' : ''}>
+                    <label className="check">
+                      <input type="checkbox" disabled={!isHost || (on && s.types.length === 1)} checked={on} onChange={(e) => toggleType(g.id, e.target.checked)} />
+                      <span>
+                        <strong>{g.name}</strong>
+                        <small>{g.blurb}</small>
+                      </span>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+
+        {s.matchMode === 'eliminate' && (
+          <p className="muted">Elimination is the whole match. Pick a continent (or the world) below, then start.</p>
+        )}
 
         <h3>Settings</h3>
         <div className="settings">
@@ -122,8 +151,35 @@ export function Lobby({ state, code, selfId, hostActions, onLeave }: Props) {
               ))}
             </select>
           </label>
-          {(s.types.includes('bid') || s.types.includes('streak')) && (
-            <p className="muted">Bid and guess adds 2 s of collecting time per country bid. Guessing streak: any order, three strikes then the next player picks up (or the question ends in solo).</p>
+          {s.matchMode === 'party' && (s.types.includes('bid') || s.types.includes('streak')) && (
+            <p className="muted">Bid and guess: in a party, 30 s auction clock that resets on every raise, until nobody outbids. Winner must then click that many (plus 2 s each). Solo: 30 seconds to click as many as you can — wrong clicks lose points. Guessing streak: 45 s per turn, any order, three strikes then the next player picks up (or the question ends in solo).</p>
+          )}
+          {s.matchMode === 'eliminate' && (
+            <label>
+              <span>Elimination pool</span>
+              <select
+                disabled={!isHost}
+                value={s.eliminateScope}
+                onChange={(e) => hostActions?.updateSettings({ eliminateScope: e.target.value as typeof s.eliminateScope })}
+              >
+                {ELIMINATE_SCOPES.map((scope) => (
+                  <option key={scope.id} value={scope.id}>
+                    {scope.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {s.matchMode === 'party' && (s.types.includes('pin') || s.types.includes('history')) && (
+            <label className="check">
+              <input
+                type="checkbox"
+                disabled={!isHost}
+                checked={s.pinCircle}
+                onChange={(e) => hostActions?.updateSettings({ pinCircle: e.target.checked })}
+              />
+              <span>Pin with a circle: click and hold, drag to grow. Smaller circles that cover the spot score more; a miss is zero.</span>
+            </label>
           )}
           <label className="check">
             <input

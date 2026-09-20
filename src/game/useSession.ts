@@ -67,7 +67,7 @@ export function useSession(config: SessionConfig, dataset: Dataset) {
         selfId,
         selfName: config.name,
         transport,
-        packInputs: { countries: dataset.countryList, places: dataset.places, languages: dataset.languages, history: dataset.history, loadFlagSvg },
+        packInputs: { countries: dataset.countryList, places: dataset.places, languages: dataset.languages, history: dataset.history, landmarks: dataset.landmarks, exports: dataset.exports, geojson: dataset.geojson, loadFlagSvg },
         onLocal: (msg, from) => dispatch({ kind: 'host', msg, from }),
       })
       hostRef.current = host

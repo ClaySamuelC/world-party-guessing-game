@@ -16,8 +16,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NAME_OVERRIDES } from './name-overrides.ts'
-import type { Country, CountryFeatureProps, CountryLanguage, Endonym, HistoryEvent, LanguageSample, Place, SourcesManifest } from '../src/data/types.ts'
+import type { Country, CountryFeatureProps, CountryLanguage, Endonym, ExportCommodity, HistoryEvent, Landmark, LanguageSample, Place, SourcesManifest } from '../src/data/types.ts'
 import { HISTORY_EVENTS } from './history-events.ts'
+import { LANDMARKS } from './landmarks.ts'
+import { EXPORTS } from './exports.ts'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE_DIR = path.join(ROOT, '.cache', 'data')
@@ -616,10 +618,12 @@ async function main() {
       { name: 'World Bank Open Data (AG.LND.TOTL.K2)', url: 'https://data.worldbank.org/indicator/AG.LND.TOTL.K2', license: 'CC BY 4.0', use: 'Land area in km²' },
       { name: 'flag-icons', url: 'https://github.com/lipis/flag-icons', license: 'MIT', use: 'Flag SVGs by ISO alpha-2' },
       { name: 'UDHR in XML (Universal Declaration of Human Rights translations)', url: 'https://efele.net/udhr/', license: 'Public domain (UN text)', use: 'Article 1 in each official language for the Language Sample game; language ↔ country via CLDR official-language data' },
-      { name: 'Wikipedia', url: 'https://en.wikipedia.org/', license: 'CC BY-SA 4.0', use: 'Reference link for each hand-written Historical Pin question (scripts/history-events.ts)' },
+      { name: 'Wikipedia', url: 'https://en.wikipedia.org/', license: 'CC BY-SA 4.0', use: 'Reference link for each hand-written Historical Pin question, landmark, and some Export Guess rankings (scripts/history-events.ts, scripts/landmarks.ts, scripts/exports.ts)' },
+      { name: 'Observatory of Economic Complexity (OEC)', url: 'https://oec.world/', license: 'CC BY 3.0 IGO (via UN Comtrade / BACI)', use: 'Top-3 merchandise exporters for the Export Guess mini-game (scripts/exports.ts)' },
     ],
     notes: [
-      'Historical Pin questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.',
+      'Historical Pin and landmark questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.',
+      'Export Guess rankings are a hand-checked snapshot (typically 2023) of the top three exporters of each commodity. They follow the cited OEC or Wikipedia table, not domestic production. Re-export hubs such as Swiss gold are avoided.',
       'Playable set = UN member states (per CLDR territory containment) plus TW, XK, PS, VA.',
       'Where the World Bank has no land-area row, areaKm2 is computed from the Natural Earth polygon and marked areaSource=computed.',
       'Alternate and contested names come from scripts/name-overrides.ts and are best-effort, not a statement of recognition.',
@@ -728,9 +732,19 @@ async function main() {
   const badHistory = history.filter((e) => e.iso2 && !countries[e.iso2]).map((e) => e.id)
   if (badHistory.length) throw new Error(`history events with unknown iso2: ${badHistory.join(', ')}`)
 
+  const landmarks: Landmark[] = LANDMARKS.map((e) => ({ ...e, iso2: e.iso2 ?? null }))
+  const badLandmarks = landmarks.filter((e) => e.iso2 && !countries[e.iso2]).map((e) => e.id)
+  if (badLandmarks.length) throw new Error(`landmarks with unknown iso2: ${badLandmarks.join(', ')}`)
+
+  const exports: ExportCommodity[] = EXPORTS
+  const badExports = exports.flatMap((e) => e.iso2s.filter((iso2) => !countries[iso2]).map((iso2) => `${e.id}:${iso2}`))
+  if (badExports.length) throw new Error(`export ranks with unknown iso2: ${badExports.join(', ')}`)
+
   const geojson: FeatureCollection<CountryFeatureProps> = { type: 'FeatureCollection', features: outFeatures }
   await writeFile(path.join(OUT_DIR, 'languages.json'), JSON.stringify(languageSamples))
   await writeFile(path.join(OUT_DIR, 'history.json'), JSON.stringify(history))
+  await writeFile(path.join(OUT_DIR, 'landmarks.json'), JSON.stringify(landmarks))
+  await writeFile(path.join(OUT_DIR, 'exports.json'), JSON.stringify(exports))
   await writeFile(path.join(OUT_DIR, 'countries.geojson'), JSON.stringify(geojson))
   await writeFile(path.join(OUT_DIR, 'countries.json'), JSON.stringify(countries))
   await writeFile(path.join(OUT_DIR, 'places.json'), JSON.stringify(places))
@@ -750,7 +764,7 @@ async function main() {
   console.log(`area computed from polygon: ${computedArea.join(', ') || 'none'}`)
   console.log(`no capital: ${noCapital.join(', ') || 'none'}`)
   console.log(`no endonym distinct from exonym: ${noEndonym.join(', ') || 'none'}`)
-  console.log(`language samples: ${languageSamples.length}, history events: ${history.length}`)
+  console.log(`language samples: ${languageSamples.length}, history events: ${history.length}, landmarks: ${landmarks.length}, export commodities: ${exports.length}`)
   console.log(`official languages without a UDHR sample: ${missingSamples.join(', ') || 'none'}`)
 }
 

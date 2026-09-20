@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { Dataset } from '../data/load'
 import type { Country } from '../data/types'
 import type { RoomState } from '../game/client'
 import type { BidProgress, PlayerResult } from '../game/protocol'
 import { MINI_GAMES, type Answer, type PublicQuestion } from '../game/questions'
+import { formatArea, formatNumber } from '../data/load'
 import { formatKm, scoreBid } from '../game/scoring'
 import type { HostActions } from '../game/useSession'
 import { WorldMap, type CountryRole, type MapPin } from '../map/WorldMap'
+import { CountryOutline } from './CountryOutline'
 import { CountryPanel } from './CountryPanel'
 import { CountrySearch } from './CountrySearch'
+import { DrawCanvas, type DrawScoreTick } from './DrawCanvas'
 import { SvgImage } from './Flag'
+import { NameGuess } from './NameGuess'
 import { getFrameAnswers, setFrameAnswers } from './prefs'
 import { Scoreboard } from './Scoreboard'
 
@@ -36,6 +40,43 @@ function unionBoxes(boxes: Box[]): Box | null {
     s = Math.min(s, b[1])
     e = Math.max(e, b[2])
     n = Math.max(n, b[3])
+  }
+  return [w, s, e, n]
+}
+
+/** Longitude of `to` closest to `from` (short path across the dateline). */
+function nearestLng(from: number, to: number) {
+  let best = to
+  let bestD = Math.abs(to - from)
+  for (const shift of [-360, 360]) {
+    const n = to + shift
+    const d = Math.abs(n - from)
+    if (d < bestD) {
+      bestD = d
+      best = n
+    }
+  }
+  return best
+}
+
+/**
+ * Union of country bboxes that may sit on both sides of ±180 (Oceania). Naive min/max
+ * longitude would span the long way around and look like the whole world.
+ */
+function unionBoxesShort(boxes: Box[]): Box | null {
+  if (!boxes.length) return null
+  const mids = boxes.map((b) => (b[0] + b[2]) / 2).sort((a, b) => a - b)
+  const ref = mids[Math.floor(mids.length / 2)]
+  let w = Infinity
+  let s = Infinity
+  let e = -Infinity
+  let n = -Infinity
+  for (const [bw, bs, be, bn] of boxes) {
+    const shift = nearestLng(ref, (bw + be) / 2) - (bw + be) / 2
+    w = Math.min(w, bw + shift)
+    e = Math.max(e, be + shift)
+    s = Math.min(s, bs)
+    n = Math.max(n, bn)
   }
   return [w, s, e, n]
 }
@@ -86,10 +127,17 @@ function TimerClock({ startAt, durationMs, frozen }: { startAt: number; duration
   )
 }
 
-function BidForm({ onBid, max }: { onBid: (n: number) => void; max: number }) {
-  const [value, setValue] = useState('')
+function BidForm({ onBid, min = 0, max }: { onBid: (n: number) => void; min?: number; max: number }) {
+  const [value, setValue] = useState(min > 0 ? String(min) : '')
+  useEffect(() => {
+    setValue((v) => {
+      const n = Number(v)
+      if (v === '' || !Number.isInteger(n) || n < min) return min > 0 ? String(min) : ''
+      return v
+    })
+  }, [min])
   const n = Number(value)
-  const ok = value !== '' && Number.isInteger(n) && n >= 0 && n <= max
+  const ok = value !== '' && Number.isInteger(n) && n >= min && n <= max
   return (
     <form
       className="bid-form"
@@ -102,11 +150,11 @@ function BidForm({ onBid, max }: { onBid: (n: number) => void; max: number }) {
         className="bid-input"
         type="number"
         inputMode="numeric"
-        min={0}
+        min={min}
         max={max}
         step={1}
         autoFocus
-        placeholder="0"
+        placeholder={String(min)}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         aria-label="Your bid"
@@ -139,6 +187,8 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
   const reveal = state.phase === 'reveal' ? state.reveal : null
   const answered = !!state.myAnswer
   const [autoFrame, setAutoFrame] = useState(getFrameAnswers)
+  const drawTickSink = useRef<(tick: DrawScoreTick | null) => void>(() => {})
+  const onDrawScoreTick = useRef((tick: DrawScoreTick | null) => drawTickSink.current(tick)).current
   const [flyTo, setFlyTo] = useState<{
     nonce: number
     bbox?: Box
@@ -184,13 +234,14 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
   // Country roles: my pick while answering; correct/wrong/valid after the reveal.
   const roles = useMemo(() => {
     const r: Record<string, CountryRole> = {}
+    for (const iso2 of state.eliminated) r[iso2] = 'eliminated'
     if (type === 'pin' || type === 'history') return r
     if (reveal) {
       const k = reveal.key
       if (k.type === 'click') {
         for (const res of Object.values(reveal.results)) if (res.answer && 'iso2' in res.answer && res.answer.iso2 !== k.iso2) r[res.answer.iso2] = 'wrong'
         r[k.iso2] = 'correct'
-      } else if (k.type === 'set' && type === 'language') {
+      } else if (k.type === 'set' && (type === 'language' || type === 'export')) {
         for (const iso2 of k.iso2s) r[iso2] = 'correct'
         if (myIso2 && !k.iso2s.includes(myIso2)) r[myIso2] = 'wrong'
       } else if (k.type === 'set') {
@@ -206,6 +257,9 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
       }
       return r
     }
+    if (q.q.region) {
+      for (const iso2 of q.q.region.iso2s) r[iso2] = 'region'
+    }
     if (type === 'bid') {
       for (const p of state.myPicks) r[p.iso2] = p.ok ? 'correct' : 'wrong'
     } else if (type === 'streak' && streak) {
@@ -213,13 +267,15 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
       if (streak.lastMiss) r[streak.lastMiss.iso2] = 'wrong'
     } else if (myIso2) r[myIso2] = 'selected'
     return r
-  }, [type, reveal, myIso2, myResult, state.myPicks, streak])
+  }, [type, reveal, myIso2, myResult, state.myPicks, streak, q.q.region, state.eliminated])
 
+  const pinCircle = state.settings.pinCircle
   // Pins: mine while answering; everyone's plus the target after the reveal.
-  const { pins, lines } = useMemo(() => {
+  const { pins, lines, circles } = useMemo(() => {
     const pins: MapPin[] = []
     const lines: { from: [number, number]; to: [number, number]; color?: string }[] = []
-    if (type !== 'pin' && type !== 'history') return { pins, lines }
+    const circles: { lat: number; lng: number; radiusKm: number; color?: string }[] = []
+    if (type !== 'pin' && type !== 'history') return { pins, lines, circles }
     const colorOf = (id: string) => PLAYER_COLORS[Math.max(0, state.players.findIndex((p) => p.id === id)) % PLAYER_COLORS.length]
     if (reveal?.key.type === 'pin') {
       for (const [id, res] of Object.entries(reveal.results)) {
@@ -227,12 +283,14 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
         const name = state.players.find((p) => p.id === id)?.name ?? '?'
         pins.push({ id, lat: res.answer.lat, lng: res.answer.lng, label: `${name} · ${formatKm(res.distanceKm ?? 0)}`, kind: id === selfId ? 'mine' : 'other', color: colorOf(id) })
         if (id === selfId) lines.push({ from: [res.answer.lat, res.answer.lng], to: [reveal.key.lat, reveal.key.lng], color: colorOf(id) })
+        if (res.radiusKm) circles.push({ lat: res.answer.lat, lng: res.answer.lng, radiusKm: res.radiusKm, color: colorOf(id) })
       }
       pins.push({ id: 'target', lat: reveal.key.lat, lng: reveal.key.lng, label: reveal.key.name, kind: 'target' })
     } else if (state.myAnswer && 'lat' in state.myAnswer) {
       pins.push({ id: 'mine', lat: state.myAnswer.lat, lng: state.myAnswer.lng, label: 'Your pin', kind: 'mine' })
+      if (state.myAnswer.radiusKm) circles.push({ lat: state.myAnswer.lat, lng: state.myAnswer.lng, radiusKm: state.myAnswer.radiusKm })
     }
-    return { pins, lines }
+    return { pins, lines, circles }
   }, [type, reveal, state.myAnswer, state.players, selfId])
 
   // What to frame after the reveal. Set-wide games (bid, streak) usually span the globe, so skip them.
@@ -248,8 +306,8 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
     } else if (k.type === 'pin') {
       boxes.push(pointBox(k.lat, k.lng))
       if (state.myAnswer && 'lat' in state.myAnswer) boxes.push(pointBox(state.myAnswer.lat, state.myAnswer.lng))
-    } else if (k.type === 'set' && type === 'language') {
-      // Highlight every official-language country; zoom to the whole set when it fits.
+    } else if (k.type === 'set' && (type === 'language' || type === 'export')) {
+      // Highlight every official-language / top-export country; zoom to the whole set when it fits.
       for (const iso2 of k.iso2s) {
         const c = dataset.countries[iso2]
         if (c) boxes.push(c.bbox)
@@ -269,6 +327,19 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
     framedForRef.current = null
   }, [q.q.id])
 
+  // Question-scoped regions (East Africa, the Caribbean, …) are the search space — always
+  // frame them when the question arrives, independent of the "zoom to answers" toggle.
+  useEffect(() => {
+    if (reveal) return
+    const region = q.q.region
+    if (!region?.iso2s.length) return
+    const boxes = region.iso2s.map((iso2) => dataset.countries[iso2]?.bbox).filter((b): b is Box => !!b)
+    const box = unionBoxesShort(boxes)
+    if (!box) return
+    const t = window.setTimeout(() => setFlyTo({ nonce: Date.now(), bbox: box }), 60)
+    return () => clearTimeout(t)
+  }, [q.q.id, q.q.region, reveal, dataset.countries])
+
   useEffect(() => {
     if (!reveal || !autoFrame || !frameBox) return
     if (framedForRef.current === q.q.id) return
@@ -277,14 +348,20 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
     setFlyTo({ nonce: Date.now(), bbox: frameBox, save: true })
   }, [reveal, autoFrame, frameBox, q.q.id])
 
-  let interaction: 'country' | 'pin' | 'none' = 'none'
+  let interaction: 'country' | 'pin' | 'circle' | 'none' = 'none'
   if (!reveal) {
-    if (type === 'click' || type === 'language') interaction = answered ? 'none' : 'country'
-    else if (type === 'pin' || type === 'history') interaction = answered ? 'none' : 'pin'
-    else if (type === 'bid') interaction = state.bidPhase === 'collect' && myProgress && !myProgress.done ? 'country' : 'none'
+    if (type === 'click' || type === 'language' || type === 'export' || type === 'eliminate') interaction = answered ? 'none' : 'country'
+    else if (type === 'pin' || type === 'history') interaction = answered ? 'none' : pinCircle ? 'circle' : 'pin'
+    else if (type === 'bid') {
+      const collecting = state.bidPhase === 'collect' || state.players.length === 1
+      interaction = collecting && !myProgress?.done ? 'country' : 'none'
+    }
     else if (type === 'streak') interaction = myTurn ? 'country' : 'none'
   }
   const canPickCountry = interaction === 'country'
+  const showMap = type !== 'name' && type !== 'draw'
+  const drawLocked = !!(state.myAnswer && 'strokes' in state.myAnswer && state.myAnswer.done)
+  const myStrokes = state.myAnswer && 'strokes' in state.myAnswer ? state.myAnswer.strokes : []
 
   const deltas = reveal ? Object.fromEntries(Object.entries(reveal.results).map(([id, r]) => [id, r.score])) : undefined
   const revealCountry =
@@ -309,17 +386,49 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
     switch (type) {
       case 'click':
         return answered ? (solo ? 'Locked in.' : 'Locked in. Waiting for others…') : 'Click the country on the map, or search below.'
+      case 'eliminate':
+        return answered
+          ? solo
+            ? 'Locked in.'
+            : 'Locked in. Waiting for others…'
+          : `Click it to knock it out${state.eliminated.length ? ` · ${state.eliminated.length} already gone` : ''}. A miss leaves it in the pool.`
+      case 'name':
+        return answered ? (solo ? 'Locked in.' : 'Locked in. Waiting for others…') : 'Type the name. Suggestions appear as you type.'
+      case 'draw':
+        return drawLocked
+          ? solo
+            ? 'Locked in.'
+            : 'Locked in. Waiting for others…'
+          : 'Sketch the shape — scale does not matter. Scroll to zoom, right-drag or Alt-drag to pan. Hit Done when you are finished.'
       case 'language':
         return answered ? (solo ? 'Locked in.' : 'Locked in. Waiting for others…') : 'Any country where it is an official language counts.'
+      case 'export':
+        return answered ? (solo ? 'Locked in.' : 'Locked in. Waiting for others…') : 'Any of the top 3 exporters counts.'
       case 'pin':
       case 'history':
-        return answered ? (solo ? 'Locked in.' : 'Locked in. Waiting for others…') : 'Click anywhere on the map to drop your pin.'
+        return answered
+          ? solo
+            ? 'Locked in.'
+            : 'Locked in. Waiting for others…'
+          : pinCircle
+            ? 'Click and hold, then drag to grow the circle. Smaller circles that still cover the spot score more.'
+            : 'Click anywhere on the map to drop your pin.'
       case 'bid':
-        if (state.bidPhase === 'bid') {
-          if (state.myAnswer && 'bid' in state.myAnswer) return solo ? `You bid ${state.myAnswer.bid}.` : `You bid ${state.myAnswer.bid}. Waiting for other bids…`
-          return solo ? 'Bid how many you can click. Deliver for points, fall short and lose some. Bid more than exist and you fail instantly.' : 'Everyone bids in secret. Highest delivered bid earns a bonus.'
+        if (solo || myProgress?.rush) {
+          if (myProgress?.done) return 'Found them all!'
+          const hits = myProgress?.hits ?? 0
+          const misses = myProgress?.misses ?? 0
+          return `Found ${hits}${misses ? ` · ${misses} wrong` : ''}. Wrong clicks lose points.`
         }
-        if (!myProgress || myProgress.bid == null || myProgress.bid === 0) return 'You sat this one out. Watch the others collect.'
+        if (state.bidPhase === 'bid') {
+          const a = state.auction
+          if (!a || a.highBid === 0) return 'Open auction. Bid how many you can click, or pass. 30 seconds on the clock — it resets whenever someone raises.'
+          if (a.passed.includes(selfId)) return 'You passed. Waiting for the auction to close.'
+          if (a.highBidderId === selfId) return `You lead at ${a.highBid}. Waiting for someone to raise, or everyone else to pass.`
+          const leader = state.players.find((p) => p.id === a.highBidderId)
+          return `${leader?.name ?? 'Someone'} leads at ${a.highBid}. Raise above that or pass.`
+        }
+        if (!myProgress || myProgress.bid == null || myProgress.bid === 0) return 'You are watching. The auction winner is collecting.'
         if (myProgress.overbid) return `Overbid! There are not ${myProgress.bid} countries in this category.`
         if (myProgress.done) return `Delivered ${myProgress.hits}/${myProgress.bid}! Waiting for the others…`
         return `Found ${myProgress.hits} of ${myProgress.bid}${myProgress.misses ? ` · ${myProgress.misses} wrong` : ''}. Wrong clicks do not count against you.`
@@ -338,27 +447,39 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
   const bidBonus = myResult && myResult.bid != null ? myResult.score - bidBase : 0
 
   return (
-    <div className="screen">
+    <div className={`screen ${showMap ? '' : 'map-off'} ${type === 'draw' ? 'draw-mode' : ''}`}>
       <WorldMap
         geojson={dataset.geojson}
         lakes={dataset.lakes}
         states={dataset.states}
-        interaction={interaction}
+        interaction={showMap ? interaction : 'none'}
         roles={roles}
         highlightKey={`${q.q.id}:${state.phase}`}
         pins={pins}
         lines={lines}
-        flyTo={flyTo}
+        circles={circles}
+        flyTo={showMap ? flyTo : null}
         onCountryClick={(iso2) => submitAnswer({ iso2 })}
         onMapClick={(lat, lng) => submitAnswer({ lat, lng })}
-        onUserMove={() => {
-          if (!framedRef.current) return
-          framedRef.current = false
-          setFlyTo({ nonce: Date.now(), restore: true })
-        }}
+        onCircle={(lat, lng, radiusKm) => submitAnswer({ lat, lng, radiusKm })}
       />
+      {!showMap && (
+        <div className="blank-stage">
+          {type === 'name' && q.q.outline && <CountryOutline outline={q.q.outline} className="country-silhouette" />}
+          {type === 'draw' && (
+            <DrawCanvas
+              strokes={myStrokes}
+              onChange={(strokes) => submitAnswer({ strokes, done: false })}
+              disabled={drawLocked || !!reveal}
+              official={reveal?.key.type === 'draw' ? reveal.key.outline : null}
+              targetScore={reveal?.key.type === 'draw' ? reveal.results[selfId]?.score : undefined}
+              onScoreTick={onDrawScoreTick}
+            />
+          )}
+        </div>
+      )}
 
-      <div className="overlay top-center">
+      <div className={`overlay ${type === 'draw' ? 'top-left' : 'top-center'}`}>
         <div className={`prompt ${myTurn ? 'my-turn' : ''}`}>
           <div className="prompt-meta">
             <span>
@@ -370,6 +491,15 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
           <div className="prompt-text">{q.q.text}</div>
           {q.q.localNames && q.q.localNames.length > 0 && <div className="prompt-local">{q.q.localNames.join(' · ')}</div>}
           {q.q.hint && <div className="prompt-hint">{q.q.hint}</div>}
+          {q.q.region && !reveal && <div className="prompt-hint">The map is framed on {q.q.region.label}.</div>}
+          {q.q.stats && (
+            <ul className="draw-stats">
+              <li>Population {formatNumber(q.q.stats.population)}</li>
+              <li>{formatArea(q.q.stats.areaKm2)}</li>
+              <li>Capital {q.q.stats.capital}</li>
+              <li>{q.q.stats.region}</li>
+            </ul>
+          )}
           {q.q.flagSvg && <SvgImage svg={q.q.flagSvg} alt="Flag" className="prompt-flag" />}
           {q.q.sample && (
             <blockquote className="prompt-sample" dir={q.q.sample.dir} lang="und">
@@ -390,7 +520,9 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
               )}
               {streak.lastMiss && !reveal && (
                 <p className="miss-fact">
-                  {streak.lastMiss.name} ranks #{streak.lastMiss.rank} of {streak.lastMiss.total} {streak.lastMiss.metric} ({streak.lastMiss.value}).
+                  {streak.lastMiss.outside
+                    ? `${streak.lastMiss.name} is not ${streak.lastMiss.metric}.`
+                    : `${streak.lastMiss.name} ranks #${streak.lastMiss.rank} of ${streak.lastMiss.total} ${streak.lastMiss.metric} (${streak.lastMiss.value}).`}
                 </p>
               )}
               <ol className="streak-list">
@@ -437,14 +569,41 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
 
           {status && <div className={`prompt-status ${myTurn ? 'good' : ''}`}>{status}</div>}
 
-          {!reveal && type === 'bid' && state.bidPhase === 'bid' && !answered && <BidForm onBid={(n) => submitAnswer({ bid: n })} max={60} />}
+          {!reveal && type === 'bid' && state.bidPhase === 'bid' && !solo && state.auction && (
+            <div className="auction-panel">
+              <div className="bid-others">
+                {state.players.map((p) => {
+                  const a = state.auction!
+                  const leading = a.highBidderId === p.id
+                  const folded = a.passed.includes(p.id)
+                  const last = a.bids[p.id]
+                  const text = folded ? 'passed' : leading ? `leading ${a.highBid}` : last != null ? `bid ${last}` : '…'
+                  return (
+                    <span key={p.id} className={`chip ${folded ? 'bad' : leading ? 'lead' : ''}`}>
+                      {p.id === selfId ? 'You' : p.name}: {text}
+                    </span>
+                  )
+                })}
+              </div>
+              {!state.auction.passed.includes(selfId) && (
+                <div className="bid-actions">
+                  {state.auction.highBidderId !== selfId && (
+                    <BidForm onBid={(n) => submitAnswer({ bid: n })} min={state.auction.highBid + 1} max={60} />
+                  )}
+                  <button type="button" className="btn" onClick={() => submitAnswer({ pass: true })}>
+                    {state.auction.highBidderId === selfId ? 'Drop out' : 'Pass'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {!reveal && type === 'bid' && state.bidPhase === 'collect' && !solo && (
             <div className="bid-others">
               {state.players.map((p) => {
                 const pr = state.bidProgress[p.id]
                 if (!pr) return null
-                const text = pr.bid == null || pr.bid === 0 ? 'sat out' : pr.overbid ? `bid ${pr.bid} · overbid` : `${pr.hits}/${pr.bid}${pr.done ? ' ✓' : ''}`
+                const text = pr.bid == null || pr.bid === 0 ? 'watching' : pr.overbid ? `bid ${pr.bid} · overbid` : `${pr.hits}/${pr.bid}${pr.done ? ' ✓' : ''}`
                 return (
                   <span key={p.id} className={`chip ${pr.overbid ? 'bad' : pr.done && pr.bid ? 'good' : ''}`}>
                     {p.id === selfId ? 'You' : p.name}: {text}
@@ -458,19 +617,44 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
             <CountrySearch countries={dataset.countryList} onSelect={(c) => submitAnswer({ iso2: c.iso2 })} placeholder="Too small to click? Search it here" />
           )}
 
+          {!reveal && type === 'name' && !answered && (
+            <NameGuess countries={dataset.countryList} onGuess={(iso2) => submitAnswer({ iso2 })} />
+          )}
+
+          {!reveal && type === 'draw' && !drawLocked && (
+            <div className="draw-actions">
+              <button type="button" className="btn" disabled={!myStrokes.length} onClick={() => submitAnswer({ strokes: myStrokes.slice(0, -1), done: false })}>
+                Undo
+              </button>
+              <button type="button" className="btn" disabled={!myStrokes.length} onClick={() => submitAnswer({ strokes: [], done: false })}>
+                Clear
+              </button>
+              <button type="button" className="btn primary" disabled={!myStrokes.length} onClick={() => submitAnswer({ strokes: myStrokes, done: true })}>
+                Done
+              </button>
+            </div>
+          )}
+
           {reveal && (
             <div className="reveal-block">
               <div className="result-banner">
-                <RevealBanner type={type} reveal={reveal} myResult={myResult} myIso2={myIso2} countries={dataset.countries} bidBonus={bidBonus} />
+                <RevealBanner type={type} reveal={reveal} myResult={myResult} myIso2={myIso2} countries={dataset.countries} bidBonus={bidBonus} drawTickSink={drawTickSink} />
               </div>
               {reveal.key.type === 'set' && (
                 <p className="reveal-list">
-                  {type === 'language' ? `${reveal.key.title} is official in ${reveal.key.iso2s.length === 1 ? 'one country' : `${reveal.key.iso2s.length} countries`}: ` : `${reveal.key.title} (${reveal.key.iso2s.length}): `}
-                  {names(reveal.key.iso2s, dataset.countries, type === 'language' ? 10 : 14)}
+                  {type === 'language'
+                    ? `${reveal.key.title} is official in ${reveal.key.iso2s.length === 1 ? 'one country' : `${reveal.key.iso2s.length} countries`}: `
+                    : type === 'export'
+                      ? `${reveal.key.title}: `
+                      : `${reveal.key.title} (${reveal.key.iso2s.length}): `}
+                  {type === 'export'
+                    ? reveal.key.iso2s.map((iso2, i) => `${i + 1}. ${dataset.countries[iso2]?.exonymEn ?? iso2}`).join(' · ')
+                    : names(reveal.key.iso2s, dataset.countries, type === 'language' ? 10 : 14)}
                 </p>
               )}
               {(reveal.key.type === 'pin' || reveal.key.type === 'set') && <SourceLink url={reveal.key.sourceUrl} label={reveal.key.sourceLabel} />}
-              {revealCountry && (type === 'click' || type === 'pin') && <CountryPanel country={revealCountry} compact />}
+              {revealCountry && (type === 'click' || type === 'pin' || type === 'eliminate' || type === 'name') && <CountryPanel country={revealCountry} compact />}
+              {reveal?.key.type === 'draw' && dataset.countries[reveal.key.iso2] && <CountryPanel country={dataset.countries[reveal.key.iso2]} compact />}
               {hostActions ? (
                 <button className="btn primary" onClick={continueMatch}>
                   Next question
@@ -507,6 +691,53 @@ export function Play({ dataset, state, selfId, submitAnswer, hostActions, onLeav
   )
 }
 
+function DrawRevealScore({
+  sink,
+  name,
+  overlap,
+  fallbackScore,
+}: {
+  sink: MutableRefObject<(tick: DrawScoreTick | null) => void>
+  name: string
+  overlap: number
+  fallbackScore: number
+}) {
+  const [tick, setTick] = useState<DrawScoreTick | null>({ score: 1000, phase: 'ready' })
+  sink.current = setTick
+  useEffect(() => {
+    return () => {
+      sink.current = () => {}
+    }
+  }, [sink])
+  const live = tick?.score ?? fallbackScore
+  const phase = tick?.phase
+  const label =
+    phase === 'missed'
+      ? 'Country outside your border'
+      : phase === 'extra'
+        ? 'Empty space inside your border'
+        : phase === 'match'
+          ? 'Country inside your border'
+          : phase === 'ready'
+            ? 'Scoring your drawing…'
+            : `That was ${name}`
+  const tallyTone =
+    phase === 'missed' || phase === 'extra'
+      ? phase
+      : phase === 'match' || (phase === 'done' && live >= 500)
+        ? 'good'
+        : phase === 'done' && live <= 0
+          ? 'bad'
+          : ''
+  return (
+    <div className="draw-reveal-score">
+      <div className={`draw-phase-label ${phase ?? 'done'}`}>{label}</div>
+      <strong className={`draw-tally ${tallyTone}`}>{signed(Math.round(live))}</strong>
+      {(phase === 'done' || !tick) && <span className="draw-tally-note">Shape match {Math.round(overlap * 100)}%</span>}
+    </div>
+  )
+}
+
 function RevealBanner({
   type,
   reveal,
@@ -514,6 +745,7 @@ function RevealBanner({
   myIso2,
   countries,
   bidBonus,
+  drawTickSink,
 }: {
   type: PublicQuestion['type']
   reveal: NonNullable<RoomState['reveal']>
@@ -521,14 +753,45 @@ function RevealBanner({
   myIso2: string | null
   countries: Record<string, Country>
   bidBonus: number
+  drawTickSink: MutableRefObject<(tick: DrawScoreTick | null) => void>
 }) {
   const k = reveal.key
   if (k.type === 'click') {
+    if (type === 'eliminate') {
+      if (myResult?.correct) return <strong className="good">Eliminated! +{myResult.score}</strong>
+      if (myResult?.answer) return <strong className="bad">Miss. It stays in the pool. That was {countries[k.iso2]?.exonymEn ?? k.iso2}.</strong>
+      return <strong className="bad">No click. {countries[k.iso2]?.exonymEn ?? k.iso2} stays in the pool.</strong>
+    }
+    if (type === 'name') {
+      if (myResult?.correct) return <strong className="good">Correct! That was {countries[k.iso2]?.exonymEn ?? k.iso2}. +{myResult.score}</strong>
+      if (myResult?.answer && 'iso2' in myResult.answer)
+        return <strong className="bad">Not quite. That was {countries[k.iso2]?.exonymEn ?? k.iso2}, not {countries[myResult.answer.iso2]?.exonymEn ?? myResult.answer.iso2}.</strong>
+      return <strong className="bad">No answer. That was {countries[k.iso2]?.exonymEn ?? k.iso2}.</strong>
+    }
     if (myResult?.correct) return <strong className="good">Correct! +{myResult.score}</strong>
     if (myResult?.answer) return <strong className="bad">Not quite. That was {countries[(myResult.answer as { iso2: string }).iso2]?.exonymEn ?? 'somewhere else'}.</strong>
     return <strong className="bad">No answer.</strong>
   }
+  if (k.type === 'draw') {
+    return (
+      <DrawRevealScore
+        sink={drawTickSink}
+        name={k.name}
+        overlap={myResult?.overlap ?? 0}
+        fallbackScore={myResult?.score ?? 0}
+      />
+    )
+  }
   if (k.type === 'pin') {
+    if (myResult?.answer && myResult.radiusKm != null) {
+      const hit = (myResult.distanceKm ?? Infinity) <= myResult.radiusKm
+      return (
+        <strong className={hit && myResult.score > 0 ? 'good' : 'bad'}>
+          {hit ? `Covered ${k.name} with a ${formatKm(myResult.radiusKm)} circle.` : `${formatKm(myResult.distanceKm ?? 0)} from ${k.name} — outside your ${formatKm(myResult.radiusKm)} circle.`}{' '}
+          {signed(myResult.score)}
+        </strong>
+      )
+    }
     if (myResult?.answer)
       return (
         <strong className={myResult.score >= 500 ? 'good' : ''}>
@@ -542,8 +805,24 @@ function RevealBanner({
     if (myIso2) return <strong className="bad">Not quite. That was {k.title}, not spoken officially in {countries[myIso2]?.exonymEn ?? myIso2}.</strong>
     return <strong className="bad">No answer. That was {k.title}.</strong>
   }
+  if (k.type === 'set' && type === 'export') {
+    if (myResult?.correct) return <strong className="good">Correct! +{myResult.score}</strong>
+    if (myIso2) return <strong className="bad">Not a top-3 exporter. {countries[myIso2]?.exonymEn ?? myIso2} is not on the list.</strong>
+    return <strong className="bad">No answer.</strong>
+  }
   if (k.type === 'set') {
-    if (!myResult || myResult.bid == null) return <strong>You sat this one out.</strong>
+    if (myResult?.rush) {
+      const hits = myResult.hits?.length ?? 0
+      const misses = myResult.misses?.length ?? 0
+      const cls = myResult.score > 0 ? 'good' : myResult.score < 0 ? 'bad' : ''
+      return (
+        <strong className={cls}>
+          Found {hits}
+          {misses ? `, ${misses} wrong` : ''}. {signed(myResult.score)}
+        </strong>
+      )
+    }
+    if (!myResult || myResult.bid == null) return <strong>{Object.keys(reveal.results).length > 1 ? 'You did not win the auction.' : 'You sat this one out.'}</strong>
     const hits = myResult.hits?.length ?? 0
     if (myResult.overbid) return <strong className="bad">Overbid! You bid {myResult.bid} but only {k.iso2s.length} exist. {signed(myResult.score)}</strong>
     if (myResult.bid === 0) return <strong>You bid 0. No points either way.</strong>

@@ -45,6 +45,13 @@ export function scoreBid(bid: number, hits: number, overbid: boolean): number {
   return Math.max(OVERBID_PENALTY, -(bid - hits) * 100)
 }
 
+/** Solo Bid and Guess: no auction — 150 per correct country, −100 per miss. Can go negative. */
+export const BID_RUSH_MISS = 100
+
+export function scoreBidRush(hits: number, misses: number): number {
+  return hits * BID_POINTS_PER_COUNTRY - misses * BID_RUSH_MISS
+}
+
 /** Guessing Streak: each rank claimed is worth an equal slice of 1000, plus 200 for closing the list. */
 export function scoreStreakPick(listLength: number): number {
   return Math.round(MAX_SCORE / listLength)
@@ -53,4 +60,19 @@ export const STREAK_FINISH_BONUS = 200
 
 export function formatKm(km: number): string {
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km).toLocaleString('en-US')} km`
+}
+
+/**
+ * Pin-circle mode: 0 if the target is outside the circle. Inside, smaller circles score more.
+ * Full marks around a 40 km radius, then exponential fall-off.
+ */
+export function scorePinCircle(radiusKm: number, distanceKm: number): number {
+  if (distanceKm > radiusKm) return 0
+  const r = Math.max(1, radiusKm)
+  return Math.round(MAX_SCORE * Math.exp(-Math.max(0, r - 40) / 350))
+}
+
+/** Draw the country: IoU of filled silhouettes, 0…1000. */
+export function scoreDraw(overlap: number): number {
+  return Math.round(MAX_SCORE * Math.max(0, Math.min(1, overlap)))
 }

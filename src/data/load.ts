@@ -1,5 +1,5 @@
 import type { FeatureCollection, Geometry } from 'geojson'
-import type { Country, CountryFeatureProps, HistoryEvent, LanguageSample, Place, SourcesManifest } from './types'
+import type { Country, CountryFeatureProps, ExportCommodity, HistoryEvent, Landmark, LanguageSample, Place, SourcesManifest } from './types'
 
 export interface Dataset {
   countries: Record<string, Country>
@@ -7,6 +7,8 @@ export interface Dataset {
   places: Place[]
   languages: LanguageSample[]
   history: HistoryEvent[]
+  landmarks: Landmark[]
+  exports: ExportCommodity[]
   geojson: FeatureCollection<Geometry, CountryFeatureProps>
   lakes: FeatureCollection<Geometry>
   states: FeatureCollection<Geometry>
@@ -24,7 +26,7 @@ async function getJson<T>(name: string): Promise<T> {
 /** Loads the bundled snapshot once and shares it across the app. */
 export function loadDataset(): Promise<Dataset> {
   cached ??= (async () => {
-    const [countries, places, geojson, lakes, states, languages, history, sources] = await Promise.all([
+    const [countries, places, geojson, lakes, states, languages, history, landmarks, exports, sources] = await Promise.all([
       getJson<Record<string, Country>>('countries.json'),
       getJson<Place[]>('places.json'),
       getJson<FeatureCollection<Geometry, CountryFeatureProps>>('countries.geojson'),
@@ -32,10 +34,12 @@ export function loadDataset(): Promise<Dataset> {
       getJson<FeatureCollection<Geometry>>('states.geojson'),
       getJson<LanguageSample[]>('languages.json'),
       getJson<HistoryEvent[]>('history.json'),
+      getJson<Landmark[]>('landmarks.json'),
+      getJson<ExportCommodity[]>('exports.json'),
       getJson<SourcesManifest>('sources.json'),
     ])
     const countryList = Object.values(countries).sort((a, b) => a.exonymEn.localeCompare(b.exonymEn))
-    return { countries, countryList, places, geojson, lakes, states, languages, history, sources }
+    return { countries, countryList, places, geojson, lakes, states, languages, history, landmarks, exports, sources }
   })()
   return cached
 }
