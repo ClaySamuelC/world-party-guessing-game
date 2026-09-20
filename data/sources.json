@@ -59,11 +59,18 @@
       "name": "Wikipedia",
       "url": "https://en.wikipedia.org/",
       "license": "CC BY-SA 4.0",
-      "use": "Reference link for each hand-written Historical Pin question and landmark (scripts/history-events.ts, scripts/landmarks.ts)"
+      "use": "Reference link for each hand-written Historical Pin question, landmark, and some Export Guess rankings (scripts/history-events.ts, scripts/landmarks.ts, scripts/exports.ts)"
+    },
+    {
+      "name": "Observatory of Economic Complexity (OEC)",
+      "url": "https://oec.world/",
+      "license": "CC BY 3.0 IGO (via UN Comtrade / BACI)",
+      "use": "Top-3 merchandise exporters for the Export Guess mini-game (scripts/exports.ts)"
     }
   ],
   "notes": [
     "Historical Pin and landmark questions are written by the project and link to a Wikipedia article for context; coordinates are approximate to the named site.",
+    "Export Guess rankings are a hand-checked snapshot (typically 2023) of the top three exporters of each commodity. They follow the cited OEC or Wikipedia table, not domestic production. Re-export hubs such as Swiss gold are avoided.",
     "Playable set = UN member states (per CLDR territory containment) plus TW, XK, PS, VA.",
     "Where the World Bank has no land-area row, areaKm2 is computed from the Natural Earth polygon and marked areaSource=computed.",
     "Alternate and contested names come from scripts/name-overrides.ts and are best-effort, not a statement of recognition."
